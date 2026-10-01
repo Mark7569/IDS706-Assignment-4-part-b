@@ -1,0 +1,874 @@
+STUDENT_NAME: Mark
+NETID: hl620
+OPTION: 2
+ROLE: builder
+AGENT_TOOL: Codex
+REPOSITORY_B_URL: 你的 Repo B GitHub URL
+===== TRANSCRIPT START =====
+# Implement approved architecture plan
+
+> You are the Builder for this project. The approved architecture plan is in docs/plan.md.
+>
+> Read the plan first and implement the project based on it. Work step by step and add the planned tests and documentation.
+>
+> If there is something in the plan should be changed, explain why before changing it.
+
+<details><summary>18 previous messages</summary>
+
+> I’ll read the approved plan and repository guidance first, then implement the steps, tests, and documentation. If the plan needs a change, I’ll explain why before making it.
+>
+> <details><summary>Explored a file, ran 3 commands</summary>
+>
+> - Ran `pwd && rg --files -g 'AGENTS.md' -g 'plan.md' -g '!node_modules' -g '!venv' -g '!\.git'`
+>
+> <details><summary>Explored a file</summary>
+>
+> - Read `./docs/plan.md`
+>
+> </details>
+>
+> - Ran `ls -la && rg --files -g '!\.git' && git status --short`
+>
+> - Ran `for p in /AGENTS.md /Users/AGENTS.md /Users/markli/AGENTS.md '/Users/markli/Python Projects/AGENTS.md' '/Users/markli/Python Projects/IDS706/AGENTS.md' '/Users/markli/Python Projects/IDS706/part-b/AGENTS.md'; do if [ -f "$p" ]; then cat "$p"; fi; done
+> python3 --version
+> command -v docker`
+>
+> </details>
+>
+> Which dataset should this project use? Please provide its local path or source URL, plus any known date format or usage permission. The repository currently contains no data.
+>
+> <details><summary>Ran 3 commands</summary>
+>
+> - Ran `cat docs/hl620_architect.txt
+> ls /opt/homebrew/bin/python* /usr/local/bin/python* 2>/dev/null
+> docker version`
+> - Ran `command -v python3.12 python3.11 python3.10
+> ls /usr/local/bin`
+> - Ran `docker version`
+>
+> </details>
+>
+> The repository contains only the plan and architect transcript. I’ll build against Python 3.13 and use a synthetic fixture for validation while the real dataset is pending. Until its source is confirmed, I’ll document an explicit `YYYY-MM-DD` input format and label prices as source values rather than assume units. The approved architecture can stay unchanged.
+>
+> **Which dataset should this project use? Please provide its local path or source URL, plus any known date format or usage permission. The repository currently contains no data.**
+>
+> Use the same Kaggle dataset I used in my previous project:
+>
+> https://www.kaggle.com/datasets/mdanwarhossain200110/gold-price-2015-2025
+>
+> The dataset contains Date, SPX, GLD, USO, SLV, and EUR/USD.
+>
+> Load the dataset from Kaggle rather than copying files from my previous repository. Check the actual date format and date coverage from the downloaded data before making assumptions about them.
+>
+> <details><summary>Ran 2 commands</summary>
+>
+> - Ran `/usr/local/bin/python3.13 --version
+> /usr/local/bin/python3.13 -m venv .venv`
+> - Ran `mkdir -p gold_analysis tests/fixtures data/raw
+> cat > requirements.txt <<'EOF'
+> numpy==2.2.6
+> pandas==2.2.3
+> scikit-learn==1.6.1
+> matplotlib==3.10.3
+> pytest==8.3.5
+> EOF
+> cat > .gitignore <<'EOF'
+> .venv/
+> __pycache__/
+> .pytest_cache/
+> *.py[cod]
+> outputs/
+> data/raw/*
+> !data/raw/.gitkeep
+> .DS_Store
+> EOF
+>  touch data/raw/.gitkeep
+> cat > .dockerignore <<'EOF'
+> .git
+> .venv
+> **/__pycache__
+> .pytest_cache
+> data/raw
+> outputs
+> EOF
+> cat > Dockerfile <<'EOF'
+> FROM python:3.13-slim
+> WORKDIR /app
+> ENV MPLBACKEND=Agg MPLCONFIGDIR=/tmp/matplotlib PYTHONDONTWRITEBYTECODE=1
+> COPY requirements.txt .
+> RUN pip install --no-cache-dir -r requirements.txt && useradd --uid 10001 --create-home analyst
+> COPY gold_analysis ./gold_analysis
+> USER analyst
+> ENTRYPOINT ["python", "-m", "gold_analysis"]
+> EOF
+> cat > gold_analysis/__init__.py <<'EOF'
+> """GLD contemporaneous association analysis; imports have no runtime effects."""
+> EOF
+> cat > gold_analysis/data.py <<'EOF'
+> """Explicit CSV validation and immutable cleaning."""
+> from pathlib import Path
+>
+> import numpy as np
+> import pandas as pd
+>
+> COLUMNS = ["Date", "SPX", "GLD", "USO", "SLV", "EUR/USD"]
+> NUMERIC = COLUMNS[1:]
+> YEARS = range(2015, 2026)
+>
+>
+> def load_data(path: str | Path) -> pd.DataFrame:
+>     """Load strings first so invalid text cannot become a missing value."""
+>     try:
+>         frame = pd.read_csv(path, dtype=str, keep_default_na=False)
+>     except pd.errors.EmptyDataError as exc:
+>         raise ValueError("Input CSV is empty; supply a header and observations.") from exc
+>     return frame
+>
+>
+> def clean_data(frame: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
+>     """Validate, deduplicate, sort and restrict dates; preserve missing targets."""
+>     missing = set(COLUMNS) - set(frame.columns)
+>     if missing:
+>         raise ValueError(f"Missing required columns: {', '.join(sorted(missing))}")
+>     if frame.empty:
+>         raise ValueError("Input has no observations.")
+>     data = frame.copy(deep=True)
+>     raw_dates = data["Date"].astype(str)
+>     if not raw_dates.str.fullmatch(r"\d{4}-\d{2}-\d{2}").all():
+>         raise ValueError("Date must use unambiguous YYYY-MM-DD format.")
+>     try:
+>         data["Date"] = pd.to_datetime(raw_dates, format="%Y-%m-%d", errors="raise")
+>     except ValueError as exc:
+>         raise ValueError("Invalid calendar date; expected YYYY-MM-DD.") from exc
+>     for column in NUMERIC:
+>         values = data[column].replace(r"^\s*$", np.nan, regex=True)
+>         try:
+>             numeric = pd.to_numeric(values, errors="raise")
+>         except (ValueError, TypeError) as exc:
+>             raise ValueError(f"Invalid numeric value in {column}; use blank cells for missing values.") from exc
+>         if np.isinf(numeric.to_numpy(dtype=float)).any():
+>             raise ValueError(f"Infinity is not allowed in {column}.")
+>         data[column] = numeric
+>     report = {
+>         "input_rows": len(data),
+>         "input_date_range": [str(data.Date.min().date()), str(data.Date.max().date())],
+>         "missing_values": data[NUMERIC].isna().sum().to_dict(),
+>         "exact_duplicates_removed": int(data.duplicated().sum()),
+>         "numeric_summary": data[NUMERIC].describe().to_string(),
+>     }
+>     data = data.drop_duplicates()
+>     if data.Date.duplicated().any():
+>         raise ValueError("Conflicting records for the same date; resolve them at the source.")
+>     in_period = data.Date.between("2015-01-01", "2025-12-31")
+>     report["out_of_period_rows"] = int((~in_period).sum())
+>     data = data.loc[in_period].sort_values("Date").reset_index(drop=True)
+>     if data.empty:
+>         raise ValueError("No observations remain within 2015–2025.")
+>     report["retained_rows"] = len(data)
+>     report["missing_gld_excluded"] = int(data.GLD.isna().sum())
+>     report["usable_gld_rows"] = int(data.GLD.notna().sum())
+>     report["retained_date_range"] = [str(data.Date.min().date()), str(data.Date.max().date())]
+>     if not data.GLD.notna().any():
+>         raise ValueError("No usable GLD observations remain; all retained GLD values are missing.")
+>     return data, report
+> EOF
+> cat > gold_analysis/analysis.py <<'EOF'
+> """Pure descriptive operations on validated observations."""
+> import pandas as pd
+> from .data import YEARS
+>
+>
+> def yearly_summary(data: pd.DataFrame) -> pd.DataFrame:
+>     result = data.groupby(data.Date.dt.year).GLD.agg(mean="mean", count="count")
+>     result = result.reindex(YEARS)
+>     result["count"] = result["count"].fillna(0).astype(int)
+>     return result.rename_axis("year").reset_index()
+>
+>
+> def above_threshold(data: pd.DataFrame, threshold: float = 200) -> pd.DataFrame:
+>     return data.loc[data.GLD > threshold].copy()
+> EOF
+> cat > gold_analysis/modeling.py <<'EOF'
+> """Chronological evaluation with training-only preprocessing."""
+> import numpy as np
+> import pandas as pd
+> from sklearn.impute import SimpleImputer
+> from sklearn.linear_model import LinearRegression
+> from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+> from sklearn.pipeline import Pipeline
+>
+> FEATURES = ["SPX", "USO", "SLV", "EUR/USD"]
+>
+>
+> def chronological_split(data: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+>     usable = data.dropna(subset=["GLD"]).sort_values("Date")
+>     if usable.Date.duplicated().any():
+>         raise ValueError("Model observations must have unique dates.")
+>     n_train = int(np.floor(0.8 * len(usable)))
+>     if n_train < 10 or len(usable) - n_train < 2:
+>         raise ValueError("Insufficient observations: require at least 10 training and 2 test rows (at least 13 usable rows).")
+>     return usable.iloc[:n_train].copy(), usable.iloc[n_train:].copy()
+>
+>
+> def evaluate(actual, predicted) -> dict:
+>     actual = np.asarray(actual, dtype=float)
+>     return {
+>         "mae": float(mean_absolute_error(actual, predicted)),
+>         "rmse": float(np.sqrt(mean_squared_error(actual, predicted))),
+>         "r2": None if np.all(actual == actual[0]) else float(r2_score(actual, predicted)),
+>     }
+>
+>
+> def fit_and_evaluate(data: pd.DataFrame) -> tuple[pd.DataFrame, dict, Pipeline]:
+>     train, test = chronological_split(data)
+>     absent = train[FEATURES].columns[train[FEATURES].isna().all()].tolist()
+>     if absent:
+>         raise ValueError(f"Predictors entirely missing in training set: {', '.join(absent)}")
+>     model = Pipeline([("imputer", SimpleImputer(strategy="median")), ("regression", LinearRegression())])
+>     model.fit(train[FEATURES], train.GLD)
+>     predicted = model.predict(test[FEATURES])
+>     baseline = np.full(len(test), train.GLD.mean())
+>     predictions = pd.DataFrame({"Date": test.Date.to_numpy(), "actual_gld": test.GLD.to_numpy(),
+>                                 "regression_prediction": predicted, "baseline_prediction": baseline})
+>     metrics = {"regression": evaluate(test.GLD, predicted), "baseline": evaluate(test.GLD, baseline),
+>                "train_rows": len(train), "test_rows": len(test),
+>                "train_date_range": [str(train.Date.min().date()), str(train.Date.max().date())],
+>                "test_date_range": [str(test.Date.min().date()), str(test.Date.max().date())]}
+>     return predictions, metrics, model
+> EOF
+> cat > gold_analysis/visualization.py <<'EOF'
+> """Noninteractive figures from prepared results, without filling missing prices."""
+> from pathlib import Path
+> from matplotlib.figure import Figure
+> from matplotlib.backends.backend_agg import FigureCanvasAgg
+>
+>
+> def save_plots(data, yearly, predictions, output: Path) -> None:
+>     def figure():
+>         fig = Figure(figsize=(9, 4.5), layout="constrained")
+>         FigureCanvasAgg(fig)
+>         return fig, fig.subplots()
+>
+>     fig, ax = figure()
+>     # Points avoid drawing invented paths across unobserved dates or missing GLD.
+>     ax.plot(data.Date, data.GLD, ".", markersize=3)
+>     ax.set(title="Observed GLD values", xlabel="Observation date", ylabel="GLD (source values)")
+>     fig.savefig(output / "gld_timeseries.png", dpi=150)
+>
+>     fig, ax = figure()
+>     ax.plot(yearly.year, yearly["mean"], "o-")
+>     ax.set(title="Yearly mean GLD (observed values only)", xlabel="Year", ylabel="GLD (source values)")
+>     ax.set_xticks(yearly.year)
+>     fig.savefig(output / "yearly_gld.png", dpi=150)
+>
+>     fig, ax = figure()
+>     ax.scatter(predictions.actual_gld, predictions.regression_prediction, label="Regression")
+>     ax.scatter(predictions.actual_gld, predictions.baseline_prediction, marker="x", label="Training-mean baseline")
+>     bounds = [predictions.iloc[:, 1:].min().min(), predictions.iloc[:, 1:].max().max()]
+>     ax.plot(bounds, bounds, "k--", label="Perfect agreement")
+>     ax.set(title="Held-out contemporaneous estimates", xlabel="Actual GLD (source values)", ylabel="Estimated GLD (source values)")
+>     ax.legend()
+>     fig.savefig(output / "actual_vs_predicted.png", dpi=150)
+> EOF
+> cat > gold_analysis/pipeline.py <<'EOF'
+> """File-oriented orchestration of the pure analytical functions."""
+> import json
+> from pathlib import Path
+> from .data import load_data, clean_data
+> from .analysis import yearly_summary, above_threshold
+> from .modeling import fit_and_evaluate
+> from .visualization import save_plots
+>
+>
+> def run_pipeline(input_path: str | Path, output_path: str | Path) -> dict:
+>     output = Path(output_path)
+>     names = ["yearly_gld.csv", "gld_above_200.csv", "test_predictions.csv", "metrics.json",
+>              "gld_timeseries.png", "yearly_gld.png", "actual_vs_predicted.png"]
+>     if Path(input_path).resolve() in [(output / name).resolve() for name in names]:
+>         raise ValueError("Input must not be one of the output files; choose a separate output directory.")
+>     data, report = clean_data(load_data(input_path))
+>     for key, value in report.items():
+>         print(f"{key}: {value}")
+>     yearly = yearly_summary(data)
+>     predictions, metrics, _ = fit_and_evaluate(data)
+>     output.mkdir(parents=True, exist_ok=True)
+>     yearly.to_csv(output / "yearly_gld.csv", index=False)
+>     above_threshold(data).to_csv(output / "gld_above_200.csv", index=False)
+>     predictions.to_csv(output / "test_predictions.csv", index=False)
+>     (output / "metrics.json").write_text(json.dumps(metrics, indent=2, allow_nan=False) + "\n")
+>     save_plots(data, yearly, predictions, output)
+>     print(json.dumps(metrics, indent=2, allow_nan=False))
+>     print("Coverage may include partial years and gaps; counts are observations, not complete trading sessions.")
+>     return metrics
+> EOF
+> cat > gold_analysis/__main__.py <<'EOF'
+> """Run with python -m gold_analysis from the repository root."""
+> import argparse
+> import sys
+> import pandas as pd
+> from .pipeline import run_pipeline
+>
+>
+> def main() -> int:
+>     parser = argparse.ArgumentParser(description="Analyze contemporaneous GLD associations (not forecasts).")
+>     parser.add_argument("--input", required=True, help="CSV with YYYY-MM-DD dates")
+>     parser.add_argument("--output", default="outputs", help="Directory for replaceable generated results")
+>     args = parser.parse_args()
+>     try:
+>         run_pipeline(args.input, args.output)
+>     except (OSError, ValueError, pd.errors.ParserError) as exc:
+>         print(f"Error: {exc}", file=sys.stderr)
+>         return 1
+>     return 0
+>
+>
+> if __name__ == "__main__":
+>     raise SystemExit(main())
+> EOF
+> .venv/bin/python -m pip install -r requirements.txt`
+>
+> </details>
+>
+> I’ll download that Kaggle dataset and inspect its dates and coverage before finalizing validation. Docker is available. The listed Python 3.13 executable is a broken link, so I’m also checking which local Python installation can support the required tests.
+>
+> <details><summary>Ran 10 commands, searched the web</summary>
+>
+> - Ran `ls -l /usr/local/bin/python3.13 /usr/local/bin/python3.10
+> ls /Library/Frameworks/Python.framework/Versions
+> curl -L --fail 'https://www.kaggle.com/api/v1/datasets/download/mdanwarhossain200110/gold-price-2015-2025' -o /tmp/gold-prices.zip`
+>
+> Searched the web for `https://www.kaggle.com/datasets/mdanwarhossain200110/gold-price-2015-2025`
+>
+> - Ran `curl -L --fail 'https://www.kaggle.com/api/v1/datasets/download/mdanwarhossain200110/gold-price-2015-2025' -o /tmp/gold-prices.zip`
+>
+> - Ran `ls /opt/homebrew/opt /usr/bin/python* /opt/anaconda3/bin/python* /Users/markli/miniconda3/bin/python* 2>/dev/null`
+>
+> - Ran `ls -la /Library/Frameworks/Python.framework/Versions /opt /opt/homebrew /Users/markli/.pyenv/versions /Users/markli/miniconda3 /Users/markli/anaconda3 2>/dev/null`
+>
+> - Ran `mkdir -p tests
+> cat > tests/conftest.py <<'EOF'
+> from pathlib import Path
+> import pandas as pd
+> import pytest
+> from gold_analysis.data import clean_data, load_data
+>
+>
+> @pytest.fixture
+> def raw():
+>     return load_data(Path(__file__).parent / "fixtures/sample_prices.csv")
+>
+>
+> @pytest.fixture
+> def clean(raw):
+>     return clean_data(raw)[0]
+> EOF
+> cat > tests/test_data.py <<'EOF'
+> import numpy as np
+> import pandas as pd
+> import pytest
+> from gold_analysis.data import clean_data, load_data
+>
+>
+> def test_loading_errors(tmp_path):
+>     with pytest.raises(FileNotFoundError):
+>         load_data(tmp_path / "absent.csv")
+>     path = tmp_path / "empty.csv"
+>     path.write_text("")
+>     with pytest.raises(ValueError, match="empty"):
+>         load_data(path)
+>     path.write_text("Date,SPX,GLD,USO,SLV,EUR/USD\n")
+>     with pytest.raises(ValueError, match="no observations"):
+>         clean_data(load_data(path))
+>
+>
+> @pytest.mark.parametrize("column,value,message", [
+>     ("Date", "01/02/2015", "YYYY-MM-DD"), ("Date", "2015-02-30", "Invalid calendar"),
+>     ("Date", "2015-1-01", "YYYY-MM-DD"), ("Date", "", "YYYY-MM-DD"),
+>     ("GLD", "oops", "Invalid numeric"), ("SPX", "NaN", "Invalid numeric"),
+>     ("SLV", "inf", "Infinity"), ("USO", "-inf", "Infinity")])
+> def test_invalid(raw, column, value, message):
+>     raw.loc[0, column] = value
+>     with pytest.raises(ValueError, match=message):
+>         clean_data(raw)
+>
+>
+> def test_columns_and_unchanged_input(raw):
+>     with pytest.raises(ValueError, match="Missing required.*SPX"):
+>         clean_data(raw.drop(columns="SPX"))
+>     raw["extra"] = "note"
+>     original = raw.copy(deep=True)
+>     result, _ = clean_data(raw)
+>     pd.testing.assert_frame_equal(raw, original)
+>     assert "extra" in result
+>
+>
+> def test_sort_duplicates_and_conflicts(raw):
+>     shuffled = pd.concat([raw.iloc[::-1], raw.iloc[[0]]], ignore_index=True)
+>     data, report = clean_data(shuffled)
+>     assert data.Date.is_monotonic_increasing
+>     assert report["exact_duplicates_removed"] == 1
+>     assert len(data) == len(raw)
+>     duplicate = raw.iloc[[0]].copy()
+>     duplicate["GLD"] = "999"
+>     with pytest.raises(ValueError, match="Conflicting"):
+>         clean_data(pd.concat([raw, duplicate]))
+>
+>
+> def test_boundaries(raw):
+>     frame = raw.iloc[:4].copy()
+>     frame["Date"] = ["2014-12-31", "2015-01-01", "2025-12-31", "2026-01-01"]
+>     data, report = clean_data(frame)
+>     assert data.Date.dt.strftime("%Y-%m-%d").tolist() == ["2015-01-01", "2025-12-31"]
+>     assert report["out_of_period_rows"] == 2
+>     with pytest.raises(ValueError, match="No observations remain"):
+>         clean_data(frame.iloc[[0, 3]])
+>
+>
+> def test_missing_values(raw):
+>     raw.loc[0, "GLD"] = ""
+>     raw.loc[1, "SPX"] = " "
+>     data, report = clean_data(raw)
+>     assert len(data) == len(raw)
+>     assert np.isnan(data.loc[0, "GLD"])
+>     assert np.isnan(data.loc[1, "SPX"])
+>     assert report["missing_gld_excluded"] == 1
+>     assert report["usable_gld_rows"] == len(raw) - 1
+>     raw["GLD"] = ""
+>     with pytest.raises(ValueError, match="No usable GLD"):
+>         clean_data(raw)
+> EOF
+> cat > tests/test_analysis.py <<'EOF'
+> import numpy as np
+> import pandas as pd
+> from gold_analysis.analysis import above_threshold, yearly_summary
+>
+>
+> def test_years_and_missing_predictors(clean):
+>     data = clean.iloc[:5].copy()
+>     data["Date"] = pd.to_datetime(["2015-01-01", "2015-12-31", "2016-01-01", "2018-05-01", "2025-12-31"])
+>     data["GLD"] = [100, 200, 300, np.nan, 400]
+>     data["SPX"] = np.nan
+>     original = data.copy(deep=True)
+>     result = yearly_summary(data).set_index("year")
+>     assert result.index.tolist() == list(range(2015, 2026))
+>     assert result.loc[2015].tolist() == [150, 2]
+>     assert result.loc[2016].tolist() == [300, 1]
+>     for year in [2017, 2018]:
+>         assert result.loc[year, "count"] == 0
+>         assert np.isnan(result.loc[year, "mean"])
+>     assert result.loc[2025].tolist() == [400, 1]
+>     pd.testing.assert_frame_equal(data, original)
+>
+>
+> def test_threshold(clean):
+>     data = clean.iloc[:4].copy()
+>     data["GLD"] = [199, 200, 201, np.nan]
+>     original = data.copy(deep=True)
+>     assert above_threshold(data).GLD.tolist() == [201]
+>     empty = above_threshold(data, 999)
+>     assert empty.empty and empty.columns.tolist() == data.columns.tolist()
+>     assert len(above_threshold(data.dropna(), 0)) == 3
+>     pd.testing.assert_frame_equal(data, original)
+> EOF
+> cat > tests/test_modeling.py <<'EOF'
+> import numpy as np
+> import pandas as pd
+> import pytest
+> from gold_analysis.modeling import FEATURES, chronological_split, fit_and_evaluate, evaluate
+>
+>
+> def test_split_rounding_and_features(clean):
+>     data = clean.iloc[:13].iloc[::-1].copy()
+>     train, test = chronological_split(data)
+>     assert len(train) == 10 and len(test) == 3
+>     assert train.Date.max() < test.Date.min()
+>     data["extra"] = "ignored"
+>     original = data.copy(deep=True)
+>     _, _, model = fit_and_evaluate(data)
+>     assert list(model.feature_names_in_) == ["SPX", "USO", "SLV", "EUR/USD"]
+>     pd.testing.assert_frame_equal(data, original)
+>     with pytest.raises(ValueError, match="Insufficient"):
+>         chronological_split(data.iloc[:12])
+>     data.loc[data.index[0], "GLD"] = np.nan
+>     with pytest.raises(ValueError, match="Insufficient"):
+>         chronological_split(data)
+>
+>
+> def test_training_only_imputation_and_baseline(clean):
+>     data = clean.copy()
+>     n = int(0.8 * len(data))
+>     data.loc[0, "SPX"] = np.nan
+>     data.loc[n:, "SPX"] = 1e9
+>     data.loc[n, "USO"] = np.nan
+>     data.loc[n:, "GLD"] = 10000
+>     predictions, metrics, model = fit_and_evaluate(data)
+>     np.testing.assert_allclose(model.named_steps["imputer"].statistics_, data.iloc[:n][FEATURES].median())
+>     np.testing.assert_allclose(predictions.baseline_prediction, data.iloc[:n].GLD.mean())
+>     assert metrics["regression"]["r2"] is None
+>     assert metrics["baseline"]["r2"] is None
+>     assert np.isfinite(predictions.regression_prediction).all()
+>     data.loc[:n-1, "SLV"] = np.nan
+>     with pytest.raises(ValueError, match="entirely missing.*SLV"):
+>         fit_and_evaluate(data)
+>
+>
+> def test_metrics_independently():
+>     metrics = evaluate([1, 2, 3], [2, 2, 5])
+>     assert metrics["mae"] == pytest.approx(1)
+>     assert metrics["rmse"] == pytest.approx(np.sqrt(5 / 3))
+>     assert metrics["r2"] == pytest.approx(-1.5)
+>     assert evaluate([2, 2], [1, 3])["r2"] is None
+> EOF
+> cat > tests/test_pipeline.py <<'EOF'
+> import json
+> from pathlib import Path
+> import subprocess
+> import sys
+> import numpy as np
+> import pandas as pd
+> import pytest
+> from gold_analysis.pipeline import run_pipeline
+>
+> FIXTURE = Path(__file__).parent / "fixtures/sample_prices.csv"
+>
+>
+> def test_cli(tmp_path):
+>     before = FIXTURE.read_bytes()
+>     result = subprocess.run([sys.executable, "-m", "gold_analysis", "--input", str(FIXTURE), "--output", str(tmp_path)], capture_output=True, text=True)
+>     assert result.returncode == 0, result.stderr
+>     assert "retained_rows: 15" in result.stdout
+>     yearly = pd.read_csv(tmp_path / "yearly_gld.csv")
+>     assert yearly.loc[0, "mean"] == 190
+>     assert yearly.loc[0, "count"] == 5
+>     assert yearly.loc[1, "mean"] == 240
+>     assert yearly.loc[1, "count"] == 5
+>     assert yearly.loc[10, "mean"] == 290
+>     assert pd.read_csv(tmp_path / "gld_above_200.csv").GLD.tolist() == list(range(210, 320, 10))
+>     predictions = pd.read_csv(tmp_path / "test_predictions.csv")
+>     assert predictions.Date.tolist() == ["2025-01-03", "2025-01-04", "2025-01-05"]
+>     np.testing.assert_allclose(predictions.baseline_prediction, 225)
+>     metrics = json.loads((tmp_path / "metrics.json").read_text(), parse_constant=lambda x: pytest.fail(x))
+>     assert metrics["baseline"]["mae"] == pytest.approx(75)
+>     assert metrics["baseline"]["rmse"] == pytest.approx(np.sqrt((65**2 + 75**2 + 85**2) / 3))
+>     for name in ["gld_timeseries.png", "yearly_gld.png", "actual_vs_predicted.png"]:
+>         assert (tmp_path / name).read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
+>         assert (tmp_path / name).stat().st_size > 1000
+>     assert FIXTURE.read_bytes() == before
+>
+>
+> def test_cli_failure(tmp_path):
+>     result = subprocess.run([sys.executable, "-m", "gold_analysis", "--input", str(tmp_path / "missing.csv")], capture_output=True, text=True)
+>     assert result.returncode != 0
+>     assert "Error:" in result.stderr and "missing.csv" in result.stderr
+>     assert "Traceback" not in result.stderr
+>
+>
+> def test_raw_overwrite_protection(tmp_path):
+>     path = tmp_path / "yearly_gld.csv"
+>     path.write_bytes(FIXTURE.read_bytes())
+>     with pytest.raises(ValueError, match="Input must not"):
+>         run_pipeline(path, tmp_path)
+>     assert path.read_bytes() == FIXTURE.read_bytes()
+> EOF
+> python3 - <<'PY'
+> import csv
+> from pathlib import Path
+> with Path('tests/fixtures/sample_prices.csv').open('w') as f:
+>     writer = csv.writer(f)
+>     writer.writerow(['Date', 'SPX', 'GLD', 'USO', 'SLV', 'EUR/USD'])
+>     for i in range(15):
+>         year = [2015, 2016, 2025][i // 5]
+>         writer.writerow([f'{year}-01-{i % 5 + 1:02d}', 2000 + i * 20, 170 + i * 10, 30 + i, 15 + i / 2, 1.1 + i / 100])
+> PY`
+>
+> - Ran `ls /opt/homebrew/opt
+> unzip -l /tmp/gold-prices.zip
+> python3 - <<'PY'
+> import zipfile
+> z=zipfile.ZipFile('/tmp/gold-prices.zip')
+> for name in z.namelist():
+>  print(name, z.read(name)[:600])
+> PY`
+>
+> - Ran `curl -L --fail 'https://www.kaggle.com/api/v1/datasets/list?search=gold-price-2015-2025' -o /tmp/kaggle-metadata.json`
+>
+> - Ran `python3 - <<'PY'
+> import json,zipfile,csv,io
+> items=json.load(open('/tmp/kaggle-metadata.json'))
+> for item in items:
+>  if item.get('ref')=='mdanwarhossain200110/gold-price-2015-2025':
+>   print(json.dumps(item,indent=2))
+> z=zipfile.ZipFile('/tmp/gold-prices.zip'); z.extract('gold_data_2015_25.csv','data/raw')
+> rows=list(csv.DictReader(io.StringIO(z.read('gold_data_2015_25.csv').decode())))
+> print('Rows',len(rows),'range',min(r['Date'] for r in rows),max(r['Date'] for r in rows))
+> PY`
+>
+> - Ran `docker build -t gold-analysis .`
+>
+> - Ran `curl -L --fail 'https://api.github.com/repos/astral-sh/python-build-standalone/releases/latest' -o /tmp/python-release.json`
+>
+> </details>
+>
+> The Kaggle download contains 2,666 rows dated **2015-01-02 through 2025-08-14**, in `YYYY-MM-DD` format. So 2025 is a partial year. Kaggle lists CC BY-SA 4.0 licensing. The modules and planned edge-case tests are written; I’m now verifying them locally and in Docker, and checking the source’s column definitions.
+>
+> <details><summary>Ran 7 commands</summary>
+>
+> - Ran `python3 - <<'PY'
+> import json
+> j=json.load(open('/tmp/python-release.json'))
+> for a in j['assets']:
+>  if 'cpython-3.13.' in a['name'] and 'aarch64-apple-darwin-install_only.tar.gz' in a['name']:
+>   print(a['browser_download_url'])
+> PY`
+> - Ran `curl -L --fail 'https://www.kaggle.com/api/v1/datasets/view/mdanwarhossain200110/gold-price-2015-2025' -o /tmp/kaggle-detail.json`
+> - Ran `curl -L --fail 'https://github.com/astral-sh/python-build-standalone/releases/download/20261001/cpython-3.13.16%2B20261001-aarch64-apple-darwin-install_only.tar.gz' -o /tmp/gold-python.tar.gz`
+> - Ran `cat /tmp/kaggle-detail.json
+> mkdir -p outputs/docker-real outputs/docker-fixture`
+> - Ran `docker run --rm --network none -v "$PWD/tests:/app/tests:ro" --entrypoint python gold-analysis -m pytest -p no:cacheprovider -q`
+> - Ran `mkdir -p /tmp/gold-python
+> tar -xzf /tmp/gold-python.tar.gz -C /tmp/gold-python
+> /tmp/gold-python/python/bin/python3.13 -m venv .venv
+> .venv/bin/python -m pip install -r requirements.txt`
+> - Ran `docker run --rm --network none -v "$PWD/data/raw:/data:ro" -v "$PWD/outputs/docker-real:/outputs" gold-analysis --input /data/gold_data_2015_25.csv --output /outputs`
+>
+> </details>
+>
+> All 21 tests pass in Docker. The uploader identifies GLD as SPDR Gold Shares ETF adjusted closing prices, sourced from Yahoo Finance—not spot gold. I’ll use that definition in the documentation and finish checking the real-data results, plot readability, and local/container agreement.
+>
+> <details><summary>Ran 6 commands, searched the web</summary>
+>
+> Searched the web for `site.ssga.com GLD base currency USD SPDR Gold Shares`
+>
+> - Ran `python3 - <<'PY'
+> p='gold_analysis/data.py'
+> s=open(p).read().replace('values = data[column].replace(r"^\\s*$", np.nan, regex=True)', 'values = data[column].mask(data[column].astype(str).str.fullmatch(r"\\s*"), np.nan)')
+> open(p,'w').write(s)
+> p='gold_analysis/visualization.py'
+> s=open(p).read().replace('GLD (source values)', 'GLD adjusted close (USD/share)').replace('Actual GLD (source values)', 'Actual GLD (USD/share)').replace('Estimated GLD (source values)', 'Estimated GLD (USD/share)')
+> open(p,'w').write(s)
+> PY`
+>
+> - Ran `.venv/bin/python -m pip install -r requirements.txt`
+>
+> - Ran ````cat > data/README.md <<'EOF'
+> # Dataset
+>
+> Use [gold price 2015–2025 by Md. Anwar Hossain](https://www.kaggle.com/datasets/mdanwarhossain200110/gold-price-2015-2025), version 1, published August 15, 2025. Downloaded directly from Kaggle on October 1, 2026; no files were copied from the previous project.
+>
+> From the repository root:
+>
+> ```bash
+> mkdir -p data/raw
+> curl -L --fail 'https://www.kaggle.com/api/v1/datasets/download/mdanwarhossain200110/gold-price-2015-2025' -o /tmp/gold-prices.zip
+> unzip -n /tmp/gold-prices.zip -d data/raw
+> ```
+>
+> Alternatively use Download on the dataset page (Kaggle may require sign-in) and extract `gold_data_2015_25.csv` into `data/raw/`. Keep the downloaded file unchanged. Raw CSVs are ignored by Git and excluded from Docker builds.
+>
+> The downloaded CSV has **2,666 observations, January 2, 2015–August 14, 2025**, with dates in strict `YYYY-MM-DD` format. These are observed endpoints, not the broader endpoints in the uploader's description. The 2025 series ends in August. Weekends, holidays, and potentially other missing sessions are not inserted. Coverage has not been certified against an exchange calendar.
+>
+> The [uploader's metadata](https://www.kaggle.com/api/v1/datasets/view/mdanwarhossain200110/gold-price-2015-2025) identifies Yahoo Finance via yfinance as the upstream source and defines the columns as follows:
+>
+> | Column | Meaning | Unit |
+> | --- | --- | --- |
+> | Date | Observation date | YYYY-MM-DD; no time-zone or closing-time field |
+> | SPX | S&P 500 daily close | Index points |
+> | GLD | SPDR Gold Shares ETF adjusted close | USD per share |
+> | USO | United States Oil Fund ETF adjusted close | USD per share |
+> | SLV | iShares Silver Trust ETF adjusted close | USD per share |
+> | EUR/USD | Euro to US dollar exchange rate | USD per EUR |
+>
+> GLD is an ETF share price, not a spot-gold quote per ounce. Its [official listing](https://www.ssga.com/us/en/individual/etfs/spdr-gold-shares-gld) confirms USD trading currency. Adjustment conventions above are attributed to the uploader; its exact yfinance version and collection settings are not supplied. Each row aligns the six fields by its one date, but simultaneous market closing times cannot be established from this file. No extra price-range restrictions or silent corrections are applied.
+>
+> Kaggle lists **CC BY-SA 4.0**, and the uploader describes research, analysis, and educational use. Preserve attribution and the applicable share-alike terms when redistributing adaptations; the upstream provider's terms may also apply. This repository distributes only a synthetic test fixture, not the raw dataset.
+>
+> Blank or whitespace-only numeric cells mean missing data; textual tokens such as `NA`, `NaN`, or `null` are rejected as invalid numeric text. Missing dates are invalid. Additional columns are retained in threshold output but never become model features.
+> EOF
+> cat > README.md <<'EOF'
+> # GLD relationship analysis
+>
+> A small Python project analyzing GLD and same-day market prices. It validates a CSV, summarizes yearly GLD values, filters GLD strictly above 200 USD/share, and evaluates contemporaneous linear regression against a training-mean baseline. This is association analysis, not future-price forecasting or evidence of causation.
+>
+> ## Local setup
+>
+> Use **Python 3.13**, the same minor version as the Docker image. From the repository root:
+>
+> ```bash
+> python3.13 -m venv .venv
+> source .venv/bin/activate
+> python -m pip install -r requirements.txt
+> python -m pytest
+> ```
+>
+> On Windows, activate with `.venv\Scripts\activate`. The five direct dependencies are pinned to tested versions in `requirements.txt`; transitive dependencies may change. No package installation or `PYTHONPATH` adjustment is needed.
+>
+> Download the dataset following [data/README.md](data/README.md), then run:
+>
+> ```bash
+> python -m gold_analysis --input data/raw/gold_data_2015_25.csv --output outputs/real
+> ```
+>
+> For a self-contained demonstration with synthetic prices:
+>
+> ```bash
+> python -m gold_analysis --input tests/fixtures/sample_prices.csv --output outputs/sample
+> ```
+>
+> The console reports input and retained coverage, numeric summaries, missingness, duplicate removals, period exclusions, missing-target exclusions, split dates, and metrics. Invalid input returns a nonzero exit status with an error message. The CLI requires `--input`; `--output` defaults to `outputs`.
+>
+> ## Processing and outputs
+>
+> Dates must be `YYYY-MM-DD`. The six required columns are Date, SPX, GLD, USO, SLV, and EUR/USD. Invalid dates, nonnumeric text, infinity, empty data, and conflicting same-date records fail validation. Exact duplicate rows are removed. Observations are sorted and restricted to 2015–2025 inclusive. No calendar filling or price repair occurs.
+>
+> Rows with missing GLD are excluded wherever a target is required, but remain visible as missing in the time series. Missing predictors do not exclude observations from descriptive summaries. The earliest `floor(0.8 * n)` usable rows train a median-imputation/linear-regression pipeline; the remaining rows form the test set. Only SPX, USO, SLV, and EUR/USD are predictors. Imputation uses training data only. An entirely missing training predictor fails clearly. At least 10 training and 2 test rows are required (13 usable observations); that safeguard does not establish statistical adequacy.
+>
+> Reruns replace these seven named files in the selected output directory:
+>
+> | File | Contents |
+> | --- | --- |
+> | `yearly_gld.csv` | All years 2015–2025, mean GLD and valid observation count; absent means are blank, never zero |
+> | `gld_above_200.csv` | Observations with GLD > 200; a header-only table is valid |
+> | `test_predictions.csv` | Date, actual GLD, regression prediction, training-mean prediction |
+> | `metrics.json` | MAE, RMSE, R² for both models plus split counts and dates; constant-test-target R² is JSON null |
+> | `gld_timeseries.png` | Observed GLD points without invented connections across absent dates |
+> | `yearly_gld.png` | Yearly averages; missing years break the line |
+> | `actual_vs_predicted.png` | Held-out actual/estimated values and perfect-agreement reference |
+>
+> Raw input is unchanged. Generated artifacts and environments are ignored by Git. Analytical functions do not write files or mutate inputs; file operations belong to the pipeline and visualization modules. Imports do not load data, fit models, or create figures.
+>
+> ## Docker
+>
+> ```bash
+> docker build -t gold-analysis .
+> mkdir -p outputs/docker
+> docker run --rm --network none \
+>   -v "$PWD/data/raw:/data:ro" \
+>   -v "$PWD/outputs/docker:/outputs" \
+>   gold-analysis --input /data/gold_data_2015_25.csv --output /outputs
+> ```
+>
+> The single-stage image runs as non-root UID 10001 with a noninteractive plotting backend. It uses the same requirements (including pytest). Builds need network access; analysis does not. Raw data, environments, caches, outputs, and Git history are excluded from the build context.
+>
+> Docker Desktop on macOS normally permits writes to this host mount. On Linux, either make the output directory writable by UID 10001 or add `--user "$(id -u):$(id -g)"` to run with your host identity. Input is mounted read-only and outputs persist on the host.
+>
+> Run the synthetic tests without networking:
+>
+> ```bash
+> docker run --rm --network none \
+>   -v "$PWD/tests:/app/tests:ro" \
+>   --entrypoint python gold-analysis -m pytest -p no:cacheprovider -q
+> ```
+>
+> Exercise error handling locally and in Docker with `--input missing.csv` or `/data/missing.csv`; both should report the missing file and exit nonzero.
+>
+> ## Interpretation and verification
+>
+> Actual dataset coverage is January 2, 2015–August 14, 2025, not eleven complete calendar years. Yearly means weight observed rows equally and can be biased by missing sessions and partial coverage. Same-date values may have different market closing times. Shared price trends and correlated predictors can inflate apparent fit or destabilize coefficients. Median imputation can distort associations; inspect missingness. A single chronological split does not prove robustness, and scores are not tuned to the holdout.
+>
+> Tests use only small synthetic inputs, with independently calculated means, thresholds, split sizes, baseline predictions and metrics. They cover validation failures, date boundaries, missing data, input immutability, leakage prevention, constant-target R², CLI outputs and errors. They neither download data nor assert a real-data score or pixel-identical plots.
+>
+> After running both environments, compare CSVs and JSON numerically with tolerances, check raw input is unchanged, and open all three plots for readable dates and units. See [docs/verification.md](docs/verification.md) for the completed checks and observed results. The approved [architecture plan](docs/plan.md) is preserved.
+> EOF````
+>
+> - Ran `docker build -t gold-analysis .`
+>
+> - Ran `MPLCONFIGDIR=/tmp/gold-mpl-run .venv/bin/python -m gold_analysis --input data/raw/gold_data_2015_25.csv --output outputs/real`
+>
+> - Ran `MPLCONFIGDIR=/tmp/gold-mpl .venv/bin/python -m pytest -q`
+>
+> </details>
+>
+> The local tests also pass. On the real dataset, all 2,666 rows are usable, with no missing values or duplicates. Regression’s held-out MAE is **31.27 USD/share**, versus **90.31** for the baseline; its R² is only **0.10**, so the documentation will keep that result in perspective. I’m finishing plot inspection and checks against the final Docker image.
+>
+> Viewed 3 images
+>
+> <details><summary>Ran 3 commands</summary>
+>
+> - Ran `docker run --rm --network none -v "$PWD/data/raw:/data:ro" -v "$PWD/outputs/docker-real:/outputs" gold-analysis --input /data/gold_data_2015_25.csv --output /outputs
+> docker run --rm --network none -v "$PWD/tests:/app/tests:ro" --entrypoint python gold-analysis -m pytest -p no:cacheprovider -q
+> docker run --rm --network none -v "$PWD/tests/fixtures:/data:ro" -v "$PWD/outputs/docker-fixture:/outputs" gold-analysis --input /data/sample_prices.csv --output /outputs
+> docker run --rm --network none gold-analysis --input /data/missing.csv`
+> - Ran `MPLCONFIGDIR=/tmp/gold-mpl-run .venv/bin/python -m gold_analysis --input tests/fixtures/sample_prices.csv --output outputs/sample
+> git diff --check
+> git status --short`
+> - Ran `MPLCONFIGDIR=/tmp/gold-mpl-run .venv/bin/python - <<'PY'
+> import json, zipfile
+> from pathlib import Path
+> import numpy as np
+> import pandas as pd
+> for local, container in [('real','docker-real'), ('sample','docker-fixture')]:
+>  for name in ['yearly_gld.csv','gld_above_200.csv','test_predictions.csv']:
+>   pd.testing.assert_frame_equal(pd.read_csv(f'outputs/{local}/{name}'),pd.read_csv(f'outputs/{container}/{name}'),rtol=1e-10,atol=1e-10)
+>  a=json.load(open(f'outputs/{local}/metrics.json')); b=json.load(open(f'outputs/{container}/metrics.json'))
+>  for model in ['regression','baseline']:
+>   for metric in ['mae','rmse','r2']:
+>    np.testing.assert_allclose(a[model][metric],b[model][metric],rtol=1e-10,atol=1e-10)
+>  for key in ['train_rows','test_rows','train_date_range','test_date_range']:
+>   assert a[key]==b[key]
+>  print(local, 'local/container tables and metrics agree')
+> assert Path('data/raw/gold_data_2015_25.csv').read_bytes()==zipfile.ZipFile('/tmp/gold-prices.zip').read('gold_data_2015_25.csv')
+> print('Raw file unchanged from Kaggle archive')
+> print(pd.read_csv('outputs/real/yearly_gld.csv').to_string(index=False))
+> print('GLD > 200 rows:',len(pd.read_csv('outputs/real/gld_above_200.csv')))
+> PY
+> git check-ignore data/raw/gold_data_2015_25.csv outputs/real/metrics.json .venv/bin/python
+> git diff --check`
+>
+> </details>
+>
+> Verification is complete: 21 tests pass locally and in Docker, real and synthetic CSV/JSON outputs agree within tolerance, and the raw CSV is unchanged. All three plots are readable, and both CLIs return a clear error for missing input. I’m recording the results and the dependency deprecation warnings in the verification notes.
+>
+> <details><summary>Ran a command</summary>
+>
+> - Ran ``cat > docs/verification.md <<'EOF'
+> # Implementation verification — October 1, 2026
+>
+> The approved architecture in `docs/plan.md` was implemented without scope changes. Python 3.13, strict ISO dates, and the real filename were finalized during implementation. Data was downloaded directly from the requested Kaggle dataset, not copied from the previous repository.
+>
+> ## Completed checks
+>
+> - Created a clean local virtual environment and installed only `requirements.txt`. The system's Python 3.13 links were broken, so local verification used a standalone CPython 3.13 interpreter in `/tmp/gold-python`. The current `.venv` depends on that temporary interpreter; for ongoing use, install Python 3.13 normally and recreate the environment using the README.
+> - Local pytest: **21 passed**. Final Docker image pytest with networking disabled: **21 passed**. Tests use synthetic data only.
+> - Built the single-stage `python:3.13-slim` image and ran as its non-root user, with read-only input and a writable host output mount. Runtime networking was disabled.
+> - Ran synthetic and real-data pipelines locally and in Docker. All three CSV tables and JSON metrics agreed with `rtol=1e-10`, `atol=1e-10`; split dates and counts matched exactly.
+> - Independently checked synthetic yearly means (190, 240, 290), counts (5 each), strict threshold selection (210 through 310), 12/3 split, baseline prediction 225, baseline MAE 75, and RMSE 75.4431353.
+> - Checked real yearly counts and means, threshold output (356 rows), test dates/counts, and valid JSON. Opened all three local real-data plots and checked dates, units, legends, and layout. Time-series points do not interpolate unobserved sessions; yearly missing values break plotted lines.
+> - Missing-file CLI checks returned status 1 and an actionable message locally and in Docker.
+> - Compared raw input bytes with the downloaded ZIP member after execution: unchanged. Confirmed Git ignores raw CSVs, generated outputs and `.venv`; `git diff --check` passed.
+>
+> ## Real-data results
+>
+> The inspected file contains 2,666 rows from **2015-01-02 through 2025-08-14**, all within the intended study period. Missing numeric values, exact duplicate rows, conflicting dates, and missing GLD exclusions were all zero.
+>
+> Training: 2,132 observations, 2015-01-02–2023-06-27. Testing: 534 observations, 2023-06-28–2025-08-14.
+>
+> | Model | MAE (USD/share) | RMSE (USD/share) | R² |
+> | --- | --- | --- | --- |
+> | Linear regression | 31.273315 | 41.883123 | 0.100359 |
+> | Training-mean baseline | 90.305223 | 100.523220 | -4.182316 |
+>
+> Regression improves on this baseline but explains little held-out variation under R². The plot shows substantial underestimation at higher GLD values. These are same-day association estimates, not future forecasts or causal effects.
+>
+> The 2025 mean is 288.867581 across 153 observations, ending August 14; it is not a full-year mean. Counts for 2015–2024 range from 249 to 253. Missing exchange sessions have not been independently reconciled against market calendars, and synchronized closing times cannot be verified from a date-only CSV.
+>
+> ## Environment notes
+>
+> Matplotlib 3.10.3 emits 14 deprecation warnings from the installed transitive pyparsing version. They do not fail tests or prevent figures from rendering. Local sandbox restrictions also caused a font-cache warning on first plot generation; verification used a writable `MPLCONFIGDIR` under `/tmp`. These environment details do not change analytical results. Dependency pins cover the five direct dependencies, not all transitive packages.
+>
+> Generated examples are in `outputs/real`, `outputs/sample`, `outputs/docker-real`, and `outputs/docker-fixture` in the working checkout. They are intentionally untracked and can be regenerated using the documented commands.
+> EOF
+> git diff --check
+> rg --files -g '!.venv' -g '!outputs' -g '!data/raw/*.csv'``
+>
+> </details>
+</details>
+
+Implemented the approved plan without architecture changes: modular analysis, CLI, tests, plots, documentation, and Docker.
+
+- **21 tests pass locally and in Docker.**
+- Downloaded Kaggle data directly; verified **2,666 rows, 2015-01-02–2025-08-14**.
+- Local/container results agree; raw data remains unchanged.
+- Generated outputs are in `outputs/real/`.
+
+See [README.md](README.md) for commands and [verification notes](docs/verification.md) for results and environment caveats. The current virtual environment uses a temporary Python interpreter; recreate it with an installed Python 3.13 for ongoing use.
+===== TRANSCRIPT END =====
