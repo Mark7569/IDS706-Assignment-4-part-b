@@ -83,3 +83,15 @@ Actual dataset coverage is January 2, 2015–August 14, 2025, not eleven complet
 Tests use only small synthetic inputs, with independently calculated means, thresholds, split sizes, baseline predictions and metrics. They cover validation failures, date boundaries, missing data, input immutability, leakage prevention, constant-target R², CLI outputs and errors. They neither download data nor assert a real-data score or pixel-identical plots.
 
 After running both environments, compare CSVs and JSON numerically with tolerances, check raw input is unchanged, and open all three plots for readable dates and units. See [docs/verification.md](docs/verification.md) for the completed checks and observed results. The approved [architecture plan](docs/plan.md) is preserved.
+
+## AI Workflow Reflection
+
+I used Codex in three separate stages: Architect, Builder, and Tester.
+
+One recommendation I changed was the original Architect's suggestion to use uv.lock and a more detailed checksum/audit system. I thought these added unnecessary complexity for the scope of this project, so I chose to use requirements.txt and a simpler pipeline instead.
+
+After the Builder finished, I manually ran the CLI on the real Kaggle dataset as a smoke test. The pipeline successfully processed 2,666 observations from 2015-01-02 to 2025-08-14 and generated the expected analysis results.
+
+The Tester later found two issues that I had not noticed: malformed CSV records and duplicate headers could be accepted, and hard-linked output files could bypass the raw-input overwrite protection. After fixing these issues, the test suite increased from 21 to 29 tests.
+
+Overall, separating the AI work into Architect, Builder, and Tester roles was useful because the Tester was able to review the Builder's work independently instead of assuming the first implementation was correct.
