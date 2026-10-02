@@ -95,3 +95,6 @@ After the Builder finished, I manually ran the CLI on the real Kaggle dataset as
 The Tester later found two issues that I had not noticed: malformed CSV records and duplicate headers could be accepted, and hard-linked output files could bypass the raw-input overwrite protection. After fixing these issues, the test suite increased from 21 to 29 tests.
 
 Overall, separating the AI work into Architect, Builder, and Tester roles was useful because the Tester was able to review the Builder's work independently instead of assuming the first implementation was correct.
+
+## Funny Slogan Mentioned In Lecture
+"Keep Calm and Refactor On-Messy Code is So Last Season!"

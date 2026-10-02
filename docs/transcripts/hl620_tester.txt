@@ -3,16 +3,19 @@ NETID: hl620
 OPTION: 2
 ROLE: tester
 AGENT_TOOL: Codex
-REPOSITORY_B_URL: 你的 Repo B GitHub URL
+REPOSITORY_B_URL: https://github.com/Mark7569/IDS706-Assignment-4-part-b.git
+
 ===== TRANSCRIPT START =====
 # Test implementation against plan
 
+[Student]
 > You are the Tester for this project. The Builder has finished the implementation.
 >
 > Review docs/plan.md first, then inspect the implementation and tests. Run the test suite and check whether the project follows the approved plan. Look for bugs, missing edge cases, data leakage, incorrect assumptions, or weak tests.
 >
 > I manually ran the CLI on the real dataset successfully before starting this testing stage. If you find a problem, explain it and fix it. Then rerun the relevant tests and verify the final project.
 
+[Agent]
 <details><summary>10 previous messages</summary>
 
 > I’ll read the approved plan first, then review the implementation and tests, run the suite, and fix any issues I find.
